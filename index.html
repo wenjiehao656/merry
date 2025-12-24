@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D圣诞树 - Three.js</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to bottom, #0c1445, #1e3a8a, #3b82f6);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            text-align: center;
+            overflow: hidden;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2rem;
+            text-shadow: 0 0 10px #ffd700;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title"></h1>
+    <audio id="christmasMusic" autoplay loop>
+        <source src="圣诞.mp3" type="audio/mpeg">
+        您的浏览器不支持音频播放。
+    </audio>
+    <div id="container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 创建场景
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000011); // 深蓝星空背景
+
+        // 创建相机
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 4, 6);
+        camera.lookAt(0, 2, 0); // 看向树中部
+
+        // 创建渲染器
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // 添加环境光
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+        scene.add(ambientLight);
+
+        // 添加点光源（暖橙色）
+        const pointLight = new THREE.PointLight(0xFFA500, 1, 100);
+        pointLight.position.set(0, 10, 0);
+        pointLight.castShadow = true;
+        scene.add(pointLight);
+
+        // 创建圣诞树（粒子系统）
+        function createTree() {
+            const treeGroup = new THREE.Group();
+
+            // 粒子数量
+            const particleCount = 150000;
+
+            // 位置数组
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+
+            for (let i = 0; i < particleCount; i++) {
+                // 随机高度 (0 到 4)
+                const y = Math.random() * 4;
+
+                // 圆锥形分布：半径随高度减小，更尖顶部
+                const maxRadius = 2 * Math.pow((4 - y) / 4, 1.5); // 更陡的收窄
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * maxRadius;
+
+                positions[i * 3] = Math.cos(angle) * radius;     // x
+                positions[i * 3 + 1] = y;                        // y
+                positions[i * 3 + 2] = Math.sin(angle) * radius; // z
+
+                // 颜色：底部深绿，顶部浅绿，星星金色
+                if (y > 3.5) {
+                    colors[i * 3] = 1;     // R
+                    colors[i * 3 + 1] = 0.84; // G
+                    colors[i * 3 + 2] = 0; // B (金色)
+                } else {
+                    const greenShade = 0.2 + (y / 4) * 0.6; // 从深绿到浅绿
+                    colors[i * 3] = 0;     // R
+                    colors[i * 3 + 1] = greenShade; // G
+                    colors[i * 3 + 2] = 0; // B
+                }
+
+                // 大小：随机0.05到0.15，随高度变化（底部更大）
+                sizes[i] = (Math.random() * 0.1 + 0.05) * (1 + y / 4); // 底部粒子更大
+            }
+
+            // 几何体
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            // 材质 - 根据设备调整粒子大小和透明度
+            const isMobile = window.innerWidth < 768;
+            const material = new THREE.PointsMaterial({
+                color: 0x228B22,
+                size: isMobile ? 0.15 : 0.1, // 手机上粒子更大
+                transparent: true,
+                opacity: isMobile ? 0.9 : 0.8, // 手机上更不透明
+                vertexColors: true // 启用顶点颜色
+            });
+
+            const particles = new THREE.Points(geometry, material);
+            treeGroup.add(particles);
+
+            // 添加金色粒子层
+            const goldParticleCount = 5000; // 增加密度
+            const goldPositions = new Float32Array(goldParticleCount * 3);
+            const goldSizes = new Float32Array(goldParticleCount);
+
+            for (let i = 0; i < goldParticleCount; i++) {
+                // 紧贴绿色粒子表面
+                const height = Math.random() * 4;
+                const maxRadius = 2 * Math.pow((4 - height) / 4, 1.5);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = maxRadius + Math.random() * 0.2; // 紧贴表面
+                goldPositions[i * 3] = Math.cos(angle) * radius;
+                goldPositions[i * 3 + 1] = height;
+                goldPositions[i * 3 + 2] = Math.sin(angle) * radius;
+                goldSizes[i] = Math.random() * 0.05 + 0.02;
+            }
+
+            const goldGeometry = new THREE.BufferGeometry();
+            goldGeometry.setAttribute('position', new THREE.BufferAttribute(goldPositions, 3));
+            goldGeometry.setAttribute('size', new THREE.BufferAttribute(goldSizes, 1));
+
+            const goldMaterial = new THREE.PointsMaterial({
+                color: 0xFFD700,
+                size: isMobile ? 0.08 : 0.05, // 手机上金色粒子也更大
+                transparent: true,
+                opacity: isMobile ? 0.8 : 0.6 // 手机上金色粒子更不透明
+            });
+
+            const goldParticles = new THREE.Points(goldGeometry, goldMaterial);
+            treeGroup.add(goldParticles);
+
+            // 添加树顶3D五角星
+            const starShape = new THREE.Shape();
+
+            // 创建五角星形状
+            const outerRadius = 0.4;
+            const innerRadius = 0.15;
+            const points = [];
+
+            for (let i = 0; i < 10; i++) {
+                const angle = (i * Math.PI) / 5; // 五角星的角度
+                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                points.push(new THREE.Vector2(x, y));
+            }
+
+            starShape.setFromPoints(points);
+
+            // 挤出设置
+            const extrudeSettings = {
+                depth: 0.1, // 厚度
+                bevelEnabled: true,
+                bevelSegments: 2,
+                steps: 2,
+                bevelSize: 0.02,
+                bevelThickness: 0.02
+            };
+
+            const starGeometry = new THREE.ExtrudeGeometry(starShape, extrudeSettings);
+            const starMaterial = new THREE.MeshLambertMaterial({
+                color: 0xFFD700,
+                emissive: 0x666600, // 增强发光效果
+                emissiveIntensity: 0.5, // 提高发光强度
+                transparent: true,
+                opacity: 0.9
+            });
+
+            const star = new THREE.Mesh(starGeometry, starMaterial);
+            star.position.set(0, 4.2, 0);
+            star.rotation.x = 0; // 让星星垂直站立，正面可以看到形状
+            star.castShadow = true;
+            treeGroup.add(star);
+
+            // 树干（保持几何体）
+            const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, 8);
+            const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = -1;
+            trunk.castShadow = true;
+            treeGroup.add(trunk);
+
+            return treeGroup;
+        }
+
+        const tree = createTree();
+        tree.position.set(0, -0.3, 0); // 微下调位置，让树稍微靠下
+        scene.add(tree);
+
+        // 获取星星对象用于点击检测
+        const star = tree.children.find(child => child.geometry instanceof THREE.ExtrudeGeometry);
+
+        // 添加鼠标和触摸点击事件监听器
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onPointerClick(event) {
+            // 阻止默认行为
+            event.preventDefault();
+
+            // 计算点击位置（兼容鼠标和触摸）
+            const clientX = event.clientX || (event.touches && event.touches[0] ? event.touches[0].clientX : 0);
+            const clientY = event.clientY || (event.touches && event.touches[0] ? event.touches[0].clientY : 0);
+
+            // 计算标准化设备坐标
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            // 从相机向点击位置发射射线
+            raycaster.setFromCamera(mouse, camera);
+
+            // 检测射线是否与星星相交
+            const intersects = raycaster.intersectObject(star);
+
+            if (intersects.length > 0) {
+                // 点击到星星，播放音乐
+                const audio = document.getElementById('christmasMusic');
+                if (audio.paused) {
+                    audio.play();
+                    // 添加点击反馈效果 - 增加星星亮度
+                    star.material.emissive.setHex(0xAAAA00);
+                    setTimeout(() => {
+                        star.material.emissive.setHex(0x666600);
+                    }, 200);
+                } else {
+                    audio.pause();
+                    // 暂停时的反馈效果 - 降低亮度
+                    star.material.emissive.setHex(0x222200);
+                    setTimeout(() => {
+                        star.material.emissive.setHex(0x666600);
+                    }, 200);
+                }
+            }
+        }
+
+        // 监听鼠标点击和触摸事件
+        window.addEventListener('click', onPointerClick);
+        window.addEventListener('touchstart', onPointerClick, { passive: false });
+
+        const snowCount = window.innerWidth < 768 ? 2000 : 10000; // 增加密度
+        const snowGeometry = new THREE.BufferGeometry();
+        const snowPositions = new Float32Array(snowCount * 3);
+        const snowSizes = new Float32Array(snowCount);
+        const snowRotations = new Float32Array(snowCount); // 添加旋转
+
+        for (let i = 0; i < snowCount; i++) {
+            snowPositions[i * 3] = (Math.random() - 0.5) * 30; // 更大范围
+            snowPositions[i * 3 + 1] = Math.random() * 15 + 5;
+            snowPositions[i * 3 + 2] = (Math.random() - 0.5) * 30;
+            snowSizes[i] = Math.random() * 0.08 + 0.02; // 更大范围
+            snowRotations[i] = Math.random() * Math.PI * 2;
+        }
+
+        snowGeometry.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+        snowGeometry.setAttribute('size', new THREE.BufferAttribute(snowSizes, 1));
+        snowGeometry.setAttribute('rotation', new THREE.BufferAttribute(snowRotations, 1));
+
+        const snowMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                pointTexture: { value: new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/disc.png') }
+            },
+            vertexShader: `
+                attribute float size;
+                attribute float rotation;
+                void main() {
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    gl_PointSize = size * (250.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D pointTexture;
+                void main() {
+                    vec4 texColor = texture2D(pointTexture, gl_PointCoord);
+                    if (texColor.a < 0.1) discard; // 透明处理
+                    gl_FragColor = vec4(1.0, 1.0, 1.0, texColor.a * 0.9);
+                }
+            `,
+            transparent: true,
+            depthTest: false
+        });
+
+        const snow = new THREE.Points(snowGeometry, snowMaterial);
+        scene.add(snow);
+
+        // 雪花动画
+        let snowTime = 0;
+        function updateSnow() {
+            snowTime += 0.01;
+            const positions = snow.geometry.attributes.position.array;
+            const rotations = snow.geometry.attributes.rotation.array;
+            for (let i = 0; i < snowCount; i++) {
+                positions[i * 3 + 1] -= 0.015 + Math.random() * 0.01; // 不同下落速度
+                if (positions[i * 3 + 1] < -5) {
+                    positions[i * 3 + 1] = 15; // 重置到顶部
+                    positions[i * 3] = (Math.random() - 0.5) * 30; // 随机x
+                    positions[i * 3 + 2] = (Math.random() - 0.5) * 30; // 随机z
+                }
+                positions[i * 3] += Math.sin(snowTime + i * 0.1) * 0.005; // 轻微飘动
+                rotations[i] += 0.01; // 旋转
+            }
+            snow.geometry.attributes.position.needsUpdate = true;
+            snow.geometry.attributes.rotation.needsUpdate = true;
+        }
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            tree.rotation.y += 0.005; // 缓慢旋转
+            updateSnow(); // 更新雪花
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 响应窗口大小变化
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // 调整相机位置适应手机
+            if (window.innerWidth < 768) {
+                camera.position.set(0, 3, 5); // 手机上拉近
+            } else {
+                camera.position.set(0, 4, 6); // 桌面
+            }
+        });
+
+        // 初始检查
+        if (window.innerWidth < 768) {
+            camera.position.set(0, 3, 5);
+        } else {
+            camera.position.set(0, 4, 6);
+        }
+
+        // 处理音频自动播放
+        const audio = document.getElementById('christmasMusic');
+        const playPromise = audio.play();
+
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                // 自动播放成功
+                console.log('圣诞音乐自动播放成功');
+            }).catch(error => {
+                // 自动播放被阻止，静默处理
+                console.log('自动播放被阻止，用户可点击星星播放音乐');
+            });
+        }
+    </script>
+</body>
+</html></content>
+<parameter name="filePath">d:\python\基础学习\题目训练\圣诞快乐\3d_christmas_tree.html
